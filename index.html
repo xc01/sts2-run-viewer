@@ -68,6 +68,32 @@
       color: var(--muted);
       font-size: 13px;
     }
+    .loading {
+      margin-top: 12px;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: var(--gold);
+      font-size: 14px;
+      font-weight: 700;
+    }
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 3px solid rgba(240, 194, 75, .25);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: spin .8s linear infinite;
+    }
+    .back-btn {
+      margin: 0 0 18px;
+      background: #26364c;
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,.12);
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
     button {
       margin-top: 12px;
       border: 0;
@@ -206,13 +232,19 @@
     <section class="uploader single-uploader">
       <div id="dropZone" class="upload-card drop-zone">
         <h2>上传战报</h2>
-        <p>把战报 JSON / TXT 拖到这里，或点击选择文件。翻译文件会自动从仓库的 <code>data/</code> 文件夹读取。</p>
-        <input id="runFile" type="file" accept=".json,.txt,application/json,text/plain" />
+        <p>把战报 JSON / TXT 拖到这里，或点击选择文件。</p>
+        <input id="runFile" type="file" accept=".run,.json,.txt,application/json,text/plain" />
         <button id="renderBtn">生成 UI</button>
+        <div id="loading" class="loading" style="display:none">
+          <span class="spinner"></span>
+          <span>正在生成 UI...</span>
+        </div>
         <div id="selectedFile" class="selected-file">尚未选择文件</div>
         <div id="error" class="error"></div>
       </div>
     </section>
+
+    <button id="backBtn" class="back-btn" style="display:none">返回</button>
 
     <section id="statusLine" class="status-line" style="display:none"></section>
     <section id="acts" class="acts" style="display:none"></section>
@@ -275,29 +307,7 @@
 
     const $ = (id) => document.getElementById(id);
 
-    function normalizeKey(raw) {
-      if (!raw) return "";
-      return String(raw)
-        .replace(/^CARD\\./i, "")
-        .replace(/^RELIC\\./i, "")
-        .replace(/^POTION\\./i, "")
-        .replace(/^MONSTER\\./i, "")
-        .replace(/^ENCOUNTER\\./i, "")
-        .replace(/^EVENT\\./i, "")
-        .replace(/^ACT\\./i, "")
-        .replace(/^CHARACTER\\./i, "")
-        .replace(/\\.title$/i, "")
-        .replace(/\\.name$/i, "")
-        .toLowerCase()
-        .trim();
-    }
-
-    function compactKey(raw) {
-      return normalizeKey(raw).replace(/[\\s_\\-.]/g, "");
-    }
-
-    function withoutEncounterMarker(raw) {
-      return normalizeKey(raw).replace(/(?:[_\\s-])?(weak|normal|elite|boss)$/i, "");
+mal|elite|boss)$/i, "");
     }
 
     function addTranslationKey(key, value) {
@@ -340,16 +350,18 @@
 
     function prettifyRaw(raw) {
       return String(raw)
-        .replace(/^CARD\\./i, "")
-        .replace(/^RELIC\\./i, "")
-        .replace(/^POTION\\./i, "")
-        .replace(/^MONSTER\\./i, "")
-        .replace(/^ENCOUNTER\\./i, "")
-        .replace(/^EVENT\\./i, "")
-        .replace(/^CHARACTER\\./i, "")
+        .replace(/^CARD[.]/i, "")
+        .replace(/^RELIC[.]/i, "")
+        .replace(/^POTION[.]/i, "")
+        .replace(/^MONSTER[.]/i, "")
+        .replace(/^ENCOUNTER[.]/i, "")
+        .replace(/^EVENT[.]/i, "")
+        .replace(/^CHARACTER[.]/i, "")
         .replace(/_/g, " ")
         .toLowerCase()
-        .replace(/\\b\\w/g, c => c.toUpperCase());
+        .split(" ")
+        .map(word => word ? word[0].toUpperCase() + word.slice(1) : word)
+        .join(" ");
     }
 
     function t(raw) {
@@ -357,20 +369,7 @@
       let key = String(raw);
       if (key.includes(".")) {
         const parts = key.split(".");
-        key = parts[parts.length - 1] === "title" || parts[parts.length - 1] === "name" ? parts[parts.length - 2] : parts[parts.length - 1];
-      }
-      const translated = lookupTranslation(key);
-      if (translated) return translated;
-      return prettifyRaw(key);
-    }
-
-    function tEncounter(raw) {
-      if (!raw) return "";
-      const base = withoutEncounterMarker(raw);
-      return lookupTranslation(base) || lookupTranslation(raw) || prettifyRaw(base);
-    }
-
-    function readFileAsText(file) {
+        key = parts[parts.length - 1] === "title"unction readFileAsText(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
@@ -705,14 +704,19 @@
       let html = `<div class="floor">第${data.floor}层</div>`;
       if (data.mode === "event") {
         html += `
-          <span class="k">事件：</span><span>${escapeHtml(data.event)}</span>\n
-          <span class="k">选择了：</span><span class="choice">${escapeHtml(data.chose)}</span>\n
-          <span class="k">奖励：</span><span class="choice">${escapeHtml(data.reward)}</span>\n
+          <span class="k">事件：</span><span>${escapeHtml(data.event)}</span>
+
+          <span class="k">选择了：</span><span class="choice">${escapeHtml(data.chose)}</span>
+
+          <span class="k">奖励：</span><span class="choice">${escapeHtml(data.reward)}</span>
+
           <span class="k">失去：</span><span class="skip">${escapeHtml(data.lost)}</span>`;
       } else {
         html += `
-          <span>${escapeHtml(data.content)}</span>\n
-          <span class="k">选择：</span><span class="choice">${escapeHtml(data.choice)}</span>\n
+          <span>${escapeHtml(data.content)}</span>
+
+          <span class="k">选择：</span><span class="choice">${escapeHtml(data.choice)}</span>
+
           <span class="k">跳过：</span><span class="skip">${escapeHtml(data.skip)}</span>`;
       }
       const tip = $("tooltip");
@@ -746,18 +750,28 @@
 
     async function renderAll() {
       $("error").textContent = "";
+      $("loading").style.display = "inline-flex";
+      $("renderBtn").disabled = true;
       try {
         const runFile = $("runFile").files[0];
         if (!runFile) throw new Error("请先上传战报文件，或把文件拖到上传区域。 ");
+
+        await new Promise(resolve => requestAnimationFrame(resolve));
         await loadTranslationFiles([]);
         const text = await readFileAsText(runFile);
         reportData = parseJsonLikeText(text);
         renderStatus(reportData);
         renderActs(reportData);
         renderCollections(reportData);
+
+        document.querySelector(".uploader").style.display = "none";
+        $("backBtn").style.display = "inline-block";
       } catch (err) {
         $("error").textContent = err.message || String(err);
         console.error(err);
+      } finally {
+        $("loading").style.display = "none";
+        $("renderBtn").disabled = false;
       }
     }
 
@@ -796,6 +810,16 @@
     $("runFile").addEventListener("change", (e) => {
       const file = e.target.files && e.target.files[0];
       $("selectedFile").textContent = file ? `已选择：${file.name}` : "尚未选择文件";
+    });
+
+    $("backBtn").addEventListener("click", () => {
+      document.querySelector(".uploader").style.display = "grid";
+      $("backBtn").style.display = "none";
+      $("statusLine").style.display = "none";
+      $("acts").style.display = "none";
+      $("collections").style.display = "none";
+      $("tooltip").style.display = "none";
+      $("error").textContent = "";
     });
 
     $("renderBtn").addEventListener("click", renderAll);
