@@ -28,6 +28,20 @@
         linear-gradient(135deg, #0c1017 0%, #121a22 46%, #0b0d12 100%);
       min-height: 100vh;
     }
+    .version-badge {
+      position: fixed;
+      right: 12px;
+      bottom: 10px;
+      z-index: 10000;
+      padding: 5px 9px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+      color: #aebbc5;
+      font-size: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      pointer-events: none;
+    }
 
     .app { width: min(1180px, calc(100vw - 32px)); margin: 0 auto; padding: 24px 0 42px; }
     .title { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 18px; }
@@ -221,6 +235,7 @@
   </style>
 </head>
 <body>
+  <div id="versionBadge" class="version-badge">v0.0.1</div>
   <main class="app">
     <div class="title">
       <div>
@@ -307,7 +322,29 @@
 
     const $ = (id) => document.getElementById(id);
 
-mal|elite|boss)$/i, "");
+    function normalizeKey(raw) {
+      if (!raw) return "";
+      return String(raw)
+        .replace(/^CARD[.]/i, "")
+        .replace(/^RELIC[.]/i, "")
+        .replace(/^POTION[.]/i, "")
+        .replace(/^MONSTER[.]/i, "")
+        .replace(/^ENCOUNTER[.]/i, "")
+        .replace(/^EVENT[.]/i, "")
+        .replace(/^ACT[.]/i, "")
+        .replace(/^CHARACTER[.]/i, "")
+        .replace(/[.]title$/i, "")
+        .replace(/[.]name$/i, "")
+        .toLowerCase()
+        .trim();
+    }
+
+    function compactKey(raw) {
+      return normalizeKey(raw).replaceAll("_", "").replaceAll("-", "").replaceAll(".", "").replaceAll(" ", "");
+    }
+
+    function withoutEncounterMarker(raw) {
+      return normalizeKey(raw).replace(/([_ -])?(weak|normal|elite|boss)$/i, "");
     }
 
     function addTranslationKey(key, value) {
@@ -369,7 +406,20 @@ mal|elite|boss)$/i, "");
       let key = String(raw);
       if (key.includes(".")) {
         const parts = key.split(".");
-        key = parts[parts.length - 1] === "title"unction readFileAsText(file) {
+        key = parts[parts.length - 1] === "title" || parts[parts.length - 1] === "name" ? parts[parts.length - 2] : parts[parts.length - 1];
+      }
+      const translated = lookupTranslation(key);
+      if (translated) return translated;
+      return prettifyRaw(key);
+    }
+
+    function tEncounter(raw) {
+      if (!raw) return "";
+      const base = withoutEncounterMarker(raw);
+      return lookupTranslation(base) || lookupTranslation(raw) || prettifyRaw(base);
+    }
+
+    function readFileAsText(file) {
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(reader.result);
