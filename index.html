@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>杀戮尖塔2战报可视化</title>
+  <style>
+    :root {
+      --bg: #10161d;
+      --panel: #16232c;
+      --panel-2: #1e2d36;
+      --text: #e6edf2;
+      --muted: #aebbc5;
+      --gold: #f0c24b;
+      --red: #ff5b62;
+      --green: #5ee070;
+      --line: rgba(255,255,255,.12);
+      --shadow: 0 18px 45px rgba(0,0,0,.4);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background:
+        radial-gradient(circle at 30% 10%, rgba(90, 62, 35, .42), transparent 34%),
+        linear-gradient(135deg, #0c1017 0%, #121a22 46%, #0b0d12 100%);
+      min-height: 100vh;
+    }
+
+    .app { width: min(1180px, calc(100vw - 32px)); margin: 0 auto; padding: 24px 0 42px; }
+    .title { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 18px; }
+    h1 { margin: 0; font-size: 26px; letter-spacing: .04em; color: var(--gold); }
+    .sub { color: var(--muted); font-size: 14px; }
+
+    .uploader {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+      margin-bottom: 18px;
+    }
+    .upload-card {
+      background: rgba(22, 35, 44, .82);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+    .upload-card h2 { margin: 0 0 8px; font-size: 16px; color: var(--gold); }
+    .upload-card p { margin: 0 0 12px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+    input[type="file"] { width: 100%; color: var(--muted); }
+    button {
+      margin-top: 12px;
+      border: 0;
+      border-radius: 12px;
+      padding: 10px 14px;
+      background: #d4a932;
+      color: #111;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:hover { filter: brightness(1.08); }
+
+    .status-line {
+      display: grid;
+      grid-template-columns: repeat(5, auto) 1fr;
+      align-items: center;
+      gap: 18px;
+      background: rgba(13, 18, 24, .86);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px 18px;
+      margin-bottom: 18px;
+      box-shadow: var(--shadow);
+    }
+    .stat-label { color: var(--muted); font-size: 12px; display: block; }
+    .stat-value { font-size: 18px; font-weight: 800; }
+    .hp { color: var(--red); }
+    .ok { color: var(--green); }
+    .fail { color: var(--red); }
+    .seed { color: var(--gold); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+
+    .acts {
+      background: rgba(13, 18, 24, .72);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: var(--shadow);
+      margin-bottom: 18px;
+    }
+    .act-row {
+      display: grid;
+      grid-template-columns: 72px 1fr;
+      align-items: center;
+      gap: 14px;
+      min-height: 58px;
+      border-bottom: 1px solid rgba(255,255,255,.07);
+    }
+    .act-row:last-child { border-bottom: 0; }
+    .act-name { color: var(--gold); font-weight: 800; }
+    .nodes { display: flex; flex-wrap: wrap; align-items: center; gap: 9px; padding: 12px 0; }
+    .node {
+      width: 34px;
+      height: 34px;
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      background: var(--panel-2);
+      border: 1px solid rgba(255,255,255,.1);
+      cursor: default;
+      position: relative;
+      font-size: 21px;
+      transition: transform .12s ease, filter .12s ease;
+    }
+    .node:hover { transform: translateY(-3px) scale(1.04); filter: brightness(1.18); z-index: 10; }
+    .node.monster { background: #293022; }
+    .node.elite { background: #3a2437; }
+    .node.boss { background: #432326; }
+    .node.shop { background: #213728; }
+    .node.treasure { background: #26364c; }
+    .node.rest_site { background: #3a2b20; }
+    .node.event, .node.unknown, .node.ancient { background: #2f2f25; }
+
+    .tooltip {
+      position: fixed;
+      width: 290px;
+      max-width: min(290px, calc(100vw - 24px));
+      background: rgba(16, 28, 36, .97);
+      border: 1px solid rgba(180, 210, 220, .25);
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: var(--text);
+      box-shadow: 0 16px 40px rgba(0,0,0,.55);
+      pointer-events: none;
+      display: none;
+      z-index: 9999;
+      font-size: 14px;
+      line-height: 1.65;
+      white-space: pre-line;
+    }
+    .tooltip .floor { color: var(--gold); font-weight: 800; margin-bottom: 4px; }
+    .tooltip .k { color: var(--gold); font-weight: 800; }
+    .tooltip .choice { color: #dbe8ef; }
+    .tooltip .skip { color: #bcc8d0; }
+
+    .collections {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+    .collection {
+      background: rgba(13, 18, 24, .78);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 16px 18px;
+      box-shadow: var(--shadow);
+    }
+    .collection h2 { margin: 0 0 12px; font-size: 17px; color: var(--gold); }
+    .pill-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .pill {
+      border: 1px solid rgba(255,255,255,.12);
+      background: rgba(255,255,255,.06);
+      padding: 6px 9px;
+      border-radius: 999px;
+      font-size: 13px;
+      color: #dce6ea;
+    }
+    .empty { color: var(--muted); font-size: 14px; }
+    .error { color: #ffb1b5; margin-top: 10px; font-size: 13px; }
+
+    @media (max-width: 760px) {
+      .uploader, .collections { grid-template-columns: 1fr; }
+      .status-line { grid-template-columns: 1fr 1fr; }
+      .act-row { grid-template-columns: 48px 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <div class="title">
+      <div>
+        <h1>杀戮尖塔2战报可视化</h1>
+        <div class="sub">上传战报 JSON / TXT，并上传翻译 JSON 文件，即可生成路线、悬浮说明、遗物与卡牌列表。</div>
+      </div>
+    </div>
+
+    <section class="uploader">
+      <div class="upload-card">
+        <h2>1. 上传战报</h2>
+        <p>支持游戏导出的 JSON，或包含 JSON 内容的 TXT 文件。</p>
+        <input id="runFile" type="file" accept=".json,.txt,application/json,text/plain" />
+      </div>
+      <div class="upload-card">
+        <h2>2. 上传翻译文件</h2>
+        <p>可一次选择全部翻译文件：sts2_card_translations.json、sts2_relics.json、sts2_potions.json 等。大小写不敏感。</p>
+        <input id="translationFiles" type="file" multiple accept=".json,application/json" />
+        <button id="renderBtn">生成 UI</button>
+        <div id="error" class="error"></div>
+      </div>
+    </section>
+
+    <section id="statusLine" class="status-line" style="display:none"></section>
+    <section id="acts" class="acts" style="display:none"></section>
+
+    <section id="collections" class="collections" style="display:none">
+      <div class="collection">
+        <h2>遗物</h2>
+        <div id="relics" class="pill-list"></div>
+      </div>
+      <div class="collection">
+        <h2>卡牌</h2>
+        <div id="cards" class="pill-list"></div>
+      </div>
+    </section>
+  </main>
+
+  <div id="tooltip" class="tooltip"></div>
+
+  <script>
+    const ICONS = {
+      ancient: "🦴",
+      monster: "👹",
+      elite: "💀",
+      boss: "🔥",
+      shop: "💰",
+      treasure: "💎",
+      rest_site: "🔥",
+      event: "❓",
+      unknown: "❓"
+    };
+
+    const TYPE_NAME = {
+      ancient: "先古之民",
+      monster: "普通怪",
+      elite: "精英",
+      boss: "首领",
+      shop: "商店",
+      treasure: "宝箱",
+      rest_site: "休息点",
+      event: "事件",
+      unknown: "未知"
+    };
+
+    let reportData = null;
+    let translations = new Map();
+
+    const $ = (id) => document.getElementById(id);
+
+    function normalizeKey(raw) {
+      if (!raw) return "";
+      return String(raw)
+        .replace(/^CARD\./i, "")
+        .replace(/^RELIC\./i, "")
+        .replace(/^POTION\./i, "")
+        .replace(/^MONSTER\./i, "")
+        .replace(/^ENCOUNTER\./i, "")
+        .replace(/^EVENT\./i, "")
+        .replace(/^ACT\./i, "")
+        .replace(/\.title$/i, "")
+        .replace(/\.name$/i, "")
+        .toLowerCase();
+    }
+
+    function addTranslationKey(key, value) {
+      if (!key || value == null) return;
+      const zh = typeof value === "string" ? value : value.name || value.title || value.text || value.zh || value["zh-CN"];
+      if (!zh || typeof zh !== "string") return;
+      translations.set(normalizeKey(key), zh);
+      translations.set(normalizeKey(String(key).replace(/_/g, " ")), zh);
+    }
+
+    function flattenTranslations(obj, prefix = "") {
+      if (!obj || typeof obj !== "object") return;
+      for (const [key, value] of Object.entries(obj)) {
+        addTranslationKey(key, value);
+        if (value && typeof value === "object" && !Array.isArray(value)) {
+          if (value.name) addTranslationKey(key, value.name);
+          if (value.title) addTranslationKey(key, value.title);
+          flattenTranslations(value, key);
+        }
+      }
+    }
+
+    function t(raw) {
+      if (raw == null) return "";
+      let key = String(raw);
+      if (key.includes(".")) {
+        const parts = key.split(".");
+        key = parts[parts.length - 1] === "title" || parts[parts.length - 1] === "name" ? parts[parts.length - 2] : parts[parts.length - 1];
+      }
+      const nk = normalizeKey(key);
+      if (translations.has(nk)) return translations.get(nk);
+      return key
+        .replace(/^CARD\./i, "")
+        .replace(/^RELIC\./i, "")
+        .replace(/^POTION\./i, "")
+        .replace(/^MONSTER\./i, "")
+        .replace(/^ENCOUNTER\./i, "")
+        .replace(/^EVENT\./i, "")
+        .replace(/_/g, " ")
+        .toLowerCase()
+        .replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    function readFileAsText(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsText(file);
+      });
+    }
+
+    async function loadTranslationFiles(files) {
+      translations = new Map();
+      for (const file of files) {
+        const text = await readFileAsText(file);
+        try {
+          const json = JSON.parse(text);
+          flattenTranslations(json);
+        } catch (e) {
+          console.warn(`翻译文件解析失败：${file.name}`, e);
+        }
+      }
+    }
+
+    function parseJsonLikeText(text) {
+      const trimmed = text.trim();
+      try { return JSON.parse(trimmed); } catch (_) {}
+      const start = trimmed.indexOf("{");
+      const end = trimmed.lastIndexOf("}");
+      if (start >= 0 && end > start) return JSON.parse(trimmed.slice(start, end + 1));
+      throw new Error("无法解析战报文件，请确认文件内容是 JSON。 ");
+    }
+
+    function getPickedCardChoices(stats) {
+      return (stats.card_choices || [])
+        .filter(x => x.was_picked)
+        .map(x => t(x.card && x.card.id));
+    }
+
+    function getSkippedCardChoices(stats) {
+      return (stats.card_choices || [])
+        .filter(x => !x.was_picked)
+        .map(x => t(x.card && x.card.id));
+    }
+
+    function getPickedRelics(stats) {
+      return [
+        ...(stats.relic_choices || []).filter(x => x.was_picked).map(x => t(x.choice)),
+        ...(stats.bought_relics || []).map(t)
+      ];
+    }
+
+    function getSkippedRelics(stats) {
+      return (stats.relic_choices || []).filter(x => !x.was_picked).map(x => t(x.choice));
+    }
+
+    function getPickedPotions(stats) {
+      return [
+        ...(stats.potion_choices || []).filter(x => x.was_picked).map(x => t(x.choice)),
+        ...(stats.bought_potions || []).map(t),
+        ...(stats.potion_used || []).map(x => `使用${t(x)}`)
+      ];
+    }
+
+    function getSkippedPotions(stats) {
+      return (stats.potion_choices || []).filter(x => !x.was_picked).map(x => t(x.choice));
+    }
+
+    function getAncientChoices(stats) {
+      const picked = [];
+      const skipped = [];
+      for (const x of stats.ancient_choice || []) {
+        const name = t(x.TextKey || (x.title && x.title.key));
+        (x.was_chosen ? picked : skipped).push(name);
+      }
+      return { picked, skipped };
+    }
+
+    function eventChoiceNames(stats) {
+      return (stats.event_choices || []).map(x => {
+        const title = x.title && x.title.key ? t(x.title.key) : "事件选项";
+        return title;
+      });
+    }
+
+    function unique(arr) {
+      return [...new Set(arr.filter(Boolean))];
+    }
+
+    function summarizeNode(node, actIndex, floorNumber, data) {
+      const stats = (node.player_stats && node.player_stats[0]) || {};
+      const room = (node.rooms && node.rooms[0]) || {};
+      const type = node.map_point_type || room.room_type || "unknown";
+      const encounter = room.model_id ? t(room.model_id) : TYPE_NAME[type] || type;
+      const turns = room.turns_taken || 0;
+      const hp = `${stats.current_hp ?? "?"}/${stats.max_hp ?? "?"}`;
+      const gold = stats.current_gold ?? "?";
+
+      const contentParts = [];
+      contentParts.push(`${TYPE_NAME[type] || type}：${encounter}`);
+      if (["monster", "elite", "boss"].includes(type)) contentParts.push(`${turns} 回合结束`);
+      if (stats.damage_taken > 0) contentParts.push(`受到 ${stats.damage_taken} 点伤害`);
+      else if (["monster", "elite", "boss"].includes(type)) contentParts.push("无伤");
+      if (stats.hp_healed > 0) contentParts.push(`恢复 ${stats.hp_healed} 点生命`);
+      if (stats.max_hp_gained > 0) contentParts.push(`最大生命 +${stats.max_hp_gained}`);
+      if (stats.max_hp_lost > 0) contentParts.push(`最大生命 -${stats.max_hp_lost}`);
+      if (stats.gold_gained > 0) contentParts.push(`获得 ${stats.gold_gained} 金币`);
+      if (stats.gold_spent > 0) contentParts.push(`花费 ${stats.gold_spent} 金币`);
+      contentParts.push(`结束生命 ${hp}，金币 ${gold}`);
+
+      const ancient = getAncientChoices(stats);
+      const picked = unique([
+        ...ancient.picked,
+        ...getPickedCardChoices(stats),
+        ...getPickedRelics(stats),
+        ...getPickedPotions(stats),
+        ...(stats.cards_gained || []).map(x => t(x.id)).filter(x => !getPickedCardChoices(stats).includes(x)),
+        ...(stats.upgraded_cards || []).map(x => `升级${t(x)}`),
+        ...(stats.cards_removed || []).map(x => `移除${t(x.id)}`),
+        ...(stats.cards_transformed || []).map(x => `${t(x.original_card && x.original_card.id)} → ${t(x.final_card && x.final_card.id)}`),
+        ...(stats.cards_enchanted || []).map(x => `${t(x.card && x.card.id)} 获得${t(x.enchantment)}附魔`),
+        ...(stats.rest_site_choices || []).map(x => t(x)),
+        ...eventChoiceNames(stats),
+        ...(stats.relics_removed || []).map(x => `失去${t(x)}`)
+      ]);
+
+      const skipped = unique([
+        ...ancient.skipped,
+        ...getSkippedCardChoices(stats),
+        ...getSkippedRelics(stats),
+        ...getSkippedPotions(stats)
+      ]);
+
+      return {
+        type,
+        floor: floorNumber,
+        act: actIndex + 1,
+        content: contentParts.join("，"),
+        choice: picked.length ? picked.join("、") : "无",
+        skip: skipped.length ? skipped.join("、") : "无"
+      };
+    }
+
+    function collectAll(data) {
+      const relics = [];
+      const cards = [];
+      const acts = data.map_point_history || [];
+      for (const act of acts) {
+        for (const node of act) {
+          const stats = (node.player_stats && node.player_stats[0]) || {};
+          for (const x of stats.relic_choices || []) if (x.was_picked) relics.push(t(x.choice));
+          for (const x of stats.bought_relics || []) relics.push(t(x));
+          for (const x of stats.cards_gained || []) cards.push(t(x.id));
+          for (const x of stats.card_choices || []) if (x.was_picked) cards.push(t(x.card && x.card.id));
+          for (const x of stats.cards_transformed || []) cards.push(t(x.final_card && x.final_card.id));
+        }
+      }
+      return { relics: unique(relics), cards: unique(cards) };
+    }
+
+    function getCharacterName(data) {
+      return t(data.character_chosen || data.player_character || data.character || data.player_class || "未知角色");
+    }
+
+    function getSeed(data) {
+      return data.seed_string || data.seed || data.play_id || "未知种子";
+    }
+
+    function isWin(data) {
+      if (typeof data.victory === "boolean") return data.victory;
+      if (typeof data.is_victory === "boolean") return data.is_victory;
+      if (data.killed_by_encounter && data.killed_by_encounter !== "NONE.NONE") return false;
+      return (data.current_hp || data.final_hp || 0) > 0;
+    }
+
+    function finalHp(data) {
+      const acts = data.map_point_history || [];
+      const lastAct = acts[acts.length - 1] || [];
+      const lastNode = lastAct[lastAct.length - 1] || {};
+      const stats = (lastNode.player_stats && lastNode.player_stats[0]) || {};
+      return `${stats.current_hp ?? data.final_hp ?? "?"}/${stats.max_hp ?? data.max_hp ?? "?"}`;
+    }
+
+    function renderStatus(data) {
+      const win = isWin(data);
+      $("statusLine").style.display = "grid";
+      $("statusLine").innerHTML = `
+        <div><span class="stat-label">种子</span><span class="stat-value seed">${escapeHtml(getSeed(data))}</span></div>
+        <div><span class="stat-label">角色</span><span class="stat-value">${escapeHtml(getCharacterName(data))}</span></div>
+        <div><span class="stat-label">最终血量</span><span class="stat-value hp">${escapeHtml(finalHp(data))}</span></div>
+        <div><span class="stat-label">结果</span><span class="stat-value ${win ? "ok" : "fail"}">${win ? "成功" : "失败"}</span></div>
+        <div><span class="stat-label">层数</span><span class="stat-value">${countFloors(data)}</span></div>
+        <div></div>
+      `;
+    }
+
+    function countFloors(data) {
+      return (data.map_point_history || []).reduce((sum, act) => sum + act.length, 0);
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"]/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;"}[ch]));
+    }
+
+    function renderActs(data) {
+      const acts = data.map_point_history || [];
+      $("acts").style.display = "block";
+      $("acts").innerHTML = "";
+      let floor = 1;
+      for (let i = 0; i < 3; i++) {
+        const row = document.createElement("div");
+        row.className = "act-row";
+        const label = document.createElement("div");
+        label.className = "act-name";
+        label.textContent = `第 ${i + 1} 幕`;
+        const nodes = document.createElement("div");
+        nodes.className = "nodes";
+        const actNodes = acts[i] || [];
+        for (const node of actNodes) {
+          const summary = summarizeNode(node, i, floor, data);
+          const el = document.createElement("div");
+          el.className = `node ${summary.type}`;
+          el.textContent = ICONS[summary.type] || "•";
+          el.dataset.tooltip = JSON.stringify(summary);
+          el.addEventListener("mouseenter", showTooltip);
+          el.addEventListener("mousemove", moveTooltip);
+          el.addEventListener("mouseleave", hideTooltip);
+          nodes.appendChild(el);
+          floor++;
+        }
+        row.append(label, nodes);
+        $("acts").appendChild(row);
+      }
+    }
+
+    function showTooltip(e) {
+      const data = JSON.parse(e.currentTarget.dataset.tooltip);
+      const html = `
+        <div class="floor">第${data.floor}层</div>
+        <span class="k">内容：</span><span>${escapeHtml(data.content)}</span>\n
+        <span class="k">选择：</span><span class="choice">${escapeHtml(data.choice)}</span>\n
+        <span class="k">跳过：</span><span class="skip">${escapeHtml(data.skip)}</span>`;
+      const tip = $("tooltip");
+      tip.innerHTML = html;
+      tip.style.display = "block";
+      moveTooltip(e);
+    }
+
+    function moveTooltip(e) {
+      const tip = $("tooltip");
+      const pad = 14;
+      const rect = tip.getBoundingClientRect();
+      let x = e.clientX + 16;
+      let y = e.clientY + 16;
+      if (x + rect.width > window.innerWidth - pad) x = e.clientX - rect.width - 16;
+      if (y + rect.height > window.innerHeight - pad) y = window.innerHeight - rect.height - pad;
+      tip.style.left = `${Math.max(pad, x)}px`;
+      tip.style.top = `${Math.max(pad, y)}px`;
+    }
+
+    function hideTooltip() {
+      $("tooltip").style.display = "none";
+    }
+
+    function renderCollections(data) {
+      const { relics, cards } = collectAll(data);
+      $("collections").style.display = "grid";
+      $("relics").innerHTML = relics.length ? relics.map(x => `<span class="pill">${escapeHtml(x)}</span>`).join("") : `<span class="empty">无</span>`;
+      $("cards").innerHTML = cards.length ? cards.map(x => `<span class="pill">${escapeHtml(x)}</span>`).join("") : `<span class="empty">无</span>`;
+    }
+
+    async function renderAll() {
+      $("error").textContent = "";
+      try {
+        const runFile = $("runFile").files[0];
+        if (!runFile) throw new Error("请先上传战报文件。 ");
+        await loadTranslationFiles($("translationFiles").files || []);
+        const text = await readFileAsText(runFile);
+        reportData = parseJsonLikeText(text);
+        renderStatus(reportData);
+        renderActs(reportData);
+        renderCollections(reportData);
+      } catch (err) {
+        $("error").textContent = err.message || String(err);
+        console.error(err);
+      }
+    }
+
+    $("renderBtn").addEventListener("click", renderAll);
+  </script>
+</body>
+</html>
