@@ -178,7 +178,7 @@
     .node.shop { background: #213728; }
     .node.treasure { background: #26364c; }
     .node.rest_site { background: #3a2b20; }
-    .node.event, .node.unknown, .node. { background: #2f2f25; }
+    .node.event, .node.unknown, .node.ancient { background: #2f2f25; }
 
     .tooltip {
       position: fixed;
@@ -235,7 +235,7 @@
   </style>
 </head>
 <body>
-  <div id="versionBadge" class="version-badge">v0.0.2</div>
+  <div id="versionBadge" class="version-badge">v0.0.3</div>
   <main class="app">
     <div class="title">
       <div>
@@ -292,7 +292,7 @@
     };
 
     const TYPE_NAME = {
-      : "先古之民",
+      ancient: "先古之民",
       monster: "普通怪",
       elite: "精英",
       boss: "首领",
@@ -309,7 +309,7 @@
     const TRANSLATION_FILES = [
       "sts2_card_translations.json",
       "sts2_events.json",
-      "sts2_misc__rewards.json",
+      "sts2_misc_ancient_rewards.json",
       "sts2_misc_card_types.json",
       "sts2_misc_characters.json",
       "sts2_misc_powers.json",
@@ -506,10 +506,10 @@
       return (stats.potion_choices || []).filter(x => !x.was_picked).map(x => t(x.choice));
     }
 
-    function getChoices(stats) {
+    function getAncientChoices(stats) {
       const picked = [];
       const skipped = [];
-      for (const x of stats._choice || []) {
+      for (const x of stats.ancient_choice || []) {
         const name = t(x.TextKey || (x.title && x.title.key));
         (x.was_chosen ? picked : skipped).push(name);
       }
