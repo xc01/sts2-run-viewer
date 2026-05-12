@@ -36,7 +36,7 @@
 
     .uploader {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr;
       gap: 14px;
       margin-bottom: 18px;
     }
@@ -50,6 +50,24 @@
     .upload-card h2 { margin: 0 0 8px; font-size: 16px; color: var(--gold); }
     .upload-card p { margin: 0 0 12px; color: var(--muted); font-size: 13px; line-height: 1.55; }
     input[type="file"] { width: 100%; color: var(--muted); }
+    .drop-zone {
+      min-height: 180px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      border: 2px dashed rgba(240, 194, 75, .35);
+      transition: border-color .15s ease, background .15s ease, transform .15s ease;
+    }
+    .drop-zone.dragover {
+      border-color: var(--gold);
+      background: rgba(240, 194, 75, .09);
+      transform: translateY(-2px);
+    }
+    .selected-file {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
     button {
       margin-top: 12px;
       border: 0;
@@ -170,7 +188,7 @@
     .error { color: #ffb1b5; margin-top: 10px; font-size: 13px; }
 
     @media (max-width: 760px) {
-      .uploader, .collections { grid-template-columns: 1fr; }
+      .collections { grid-template-columns: 1fr; }
       .status-line { grid-template-columns: 1fr 1fr; }
       .act-row { grid-template-columns: 48px 1fr; }
     }
@@ -185,17 +203,13 @@
       </div>
     </div>
 
-    <section class="uploader">
-      <div class="upload-card">
-        <h2>1. 上传战报</h2>
-        <p>支持游戏导出的 JSON，或包含 JSON 内容的 TXT 文件。</p>
+    <section class="uploader single-uploader">
+      <div id="dropZone" class="upload-card drop-zone">
+        <h2>上传战报</h2>
+        <p>把战报 JSON / TXT 拖到这里，或点击选择文件。翻译文件会自动从仓库的 <code>data/</code> 文件夹读取。</p>
         <input id="runFile" type="file" accept=".json,.txt,application/json,text/plain" />
-      </div>
-      <div class="upload-card">
-        <h2>2. 上传翻译文件</h2>
-        <p>翻译文件默认从 GitHub 仓库的 <code>data/</code> 文件夹读取，例如 <code>data/sts2_card_translations.json</code>。如果自动读取失败，也可以在这里手动上传覆盖。</p>
-        <input id="translationFiles" type="file" multiple accept=".json,application/json" />
         <button id="renderBtn">生成 UI</button>
+        <div id="selectedFile" class="selected-file">尚未选择文件</div>
         <div id="error" class="error"></div>
       </div>
     </section>
@@ -611,8 +625,8 @@
       $("error").textContent = "";
       try {
         const runFile = $("runFile").files[0];
-        if (!runFile) throw new Error("请先上传战报文件。 ");
-        await loadTranslationFiles($("translationFiles").files || []);
+        if (!runFile) throw new Error("请先上传战报文件，或把文件拖到上传区域。 ");
+        await loadTranslationFiles([]);
         const text = await readFileAsText(runFile);
         reportData = parseJsonLikeText(text);
         renderStatus(reportData);
@@ -623,6 +637,43 @@
         console.error(err);
       }
     }
+
+    function setRunFile(file) {
+      if (!file) return;
+      const input = $("runFile");
+      const dt = new DataTransfer();
+      dt.items.add(file);
+      input.files = dt.files;
+      $("selectedFile").textContent = `已选择：${file.name}`;
+    }
+
+    const dropZone = $("dropZone");
+
+    dropZone.addEventListener("click", (e) => {
+      if (e.target.tagName !== "BUTTON" && e.target.tagName !== "INPUT") $("runFile").click();
+    });
+
+    dropZone.addEventListener("dragover", (e) => {
+      e.preventDefault();
+      dropZone.classList.add("dragover");
+    });
+
+    dropZone.addEventListener("dragleave", () => {
+      dropZone.classList.remove("dragover");
+    });
+
+    dropZone.addEventListener("drop", (e) => {
+      e.preventDefault();
+      dropZone.classList.remove("dragover");
+      const file = e.dataTransfer.files && e.dataTransfer.files[0];
+      setRunFile(file);
+      if (file) renderAll();
+    });
+
+    $("runFile").addEventListener("change", (e) => {
+      const file = e.target.files && e.target.files[0];
+      $("selectedFile").textContent = file ? `已选择：${file.name}` : "尚未选择文件";
+    });
 
     $("renderBtn").addEventListener("click", renderAll);
   </script>
