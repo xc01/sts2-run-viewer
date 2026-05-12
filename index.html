@@ -235,7 +235,7 @@
   </style>
 </head>
 <body>
-  <div id="versionBadge" class="version-badge">v0.0.3</div>
+  <div id="versionBadge" class="version-badge">v0.0.4</div>
   <main class="app">
     <div class="title">
       <div>
@@ -561,7 +561,8 @@
       const stats = (node.player_stats && node.player_stats[0]) || {};
       const room = (node.rooms && node.rooms[0]) || {};
       const type = node.map_point_type || room.room_type || "unknown";
-      const isEventNode = room.room_type === "event" || ["event", "unknown"].includes(type);
+      const isAncientNode = type === "ancient";
+      const isEventNode = !isAncientNode && (room.room_type === "event" || ["event", "unknown"].includes(type));
       const encounter = room.model_id ? tEncounter(room.model_id) : TYPE_NAME[type] || type;
       const turns = room.turns_taken || 0;
       const hp = `${stats.current_hp ?? "?"}/${stats.max_hp ?? "?"}`;
