@@ -28,20 +28,6 @@
         linear-gradient(135deg, #0c1017 0%, #121a22 46%, #0b0d12 100%);
       min-height: 100vh;
     }
-    .version-badge {
-      position: fixed;
-      right: 12px;
-      bottom: 10px;
-      z-index: 10000;
-      padding: 5px 9px;
-      border-radius: 999px;
-      background: rgba(0, 0, 0, 0.55);
-      border: 1px solid rgba(255, 255, 255, 0.18);
-      color: #aebbc5;
-      font-size: 12px;
-      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-      pointer-events: none;
-    }
 
     .app { width: min(1180px, calc(100vw - 32px)); margin: 0 auto; padding: 24px 0 42px; }
     .title { display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; margin-bottom: 18px; }
@@ -81,6 +67,24 @@
       margin-top: 10px;
       color: var(--muted);
       font-size: 13px;
+    }
+    .save-loader {
+      margin-top: 14px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+    }
+    .save-loader select {
+      min-width: 220px;
+      border-radius: 10px;
+      padding: 9px 10px;
+      background: rgba(255,255,255,.08);
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,.18);
+    }
+    .save-loader option {
+      color: #111;
     }
     .loading {
       margin-top: 12px;
@@ -235,7 +239,6 @@
   </style>
 </head>
 <body>
-  <div id="versionBadge" class="version-badge">v0.0.4</div>
   <main class="app">
     <div class="title">
       <div>
@@ -255,6 +258,14 @@
           <span>正在生成 UI...</span>
         </div>
         <div id="selectedFile" class="selected-file">尚未选择文件</div>
+
+        <div class="save-loader">
+          <button id="loadSavesBtn" type="button">读取 saves 文件夹</button>
+          <select id="saveSelect">
+            <option value="">请选择已有存档</option>
+          </select>
+          <button id="loadSelectedSaveBtn" type="button">打开存档</button>
+        </div>
         <div id="error" class="error"></div>
       </div>
     </section>
@@ -305,6 +316,7 @@
 
     let reportData = null;
     let translations = new Map();
+    let saveManifest = [];
 
     const TRANSLATION_FILES = [
       "sts2_card_translations.json",
@@ -561,8 +573,7 @@
       const stats = (node.player_stats && node.player_stats[0]) || {};
       const room = (node.rooms && node.rooms[0]) || {};
       const type = node.map_point_type || room.room_type || "unknown";
-      const isAncientNode = type === "ancient";
-      const isEventNode = !isAncientNode && (room.room_type === "event" || ["event", "unknown"].includes(type));
+      const isEventNode = room.room_type === "event" || ["event", "unknown", "ancient"].includes(type);
       const encounter = room.model_id ? tEncounter(room.model_id) : TYPE_NAME[type] || type;
       const turns = room.turns_taken || 0;
       const hp = `${stats.current_hp ?? "?"}/${stats.max_hp ?? "?"}`;
@@ -799,6 +810,69 @@
       $("cards").innerHTML = cards.length ? cards.map(x => `<span class="pill">${escapeHtml(x)}</span>`).join("") : `<span class="empty">无</span>`;
     }
 
+    async function renderReportObject(data) {
+      reportData = data;
+      renderStatus(reportData);
+      renderActs(reportData);
+      renderCollections(reportData);
+
+      document.querySelector(".uploader").style.display = "none";
+      $("backBtn").style.display = "inline-block";
+    }
+
+    async function loadSavesManifest() {
+      $("error").textContent = "";
+      $("loading").style.display = "inline-flex";
+      try {
+        const response = await fetch("saves/manifest.json?ts=" + Date.now());
+        if (!response.ok) {
+          throw new Error("没有找到 saves/manifest.json，请确认 saves 文件夹和 manifest.json 已经上传到 GitHub。");
+        }
+
+        saveManifest = await response.json();
+        if (!Array.isArray(saveManifest)) {
+          throw new Error("saves/manifest.json 格式错误，顶层应该是数组。");
+        }
+
+        const select = $("saveSelect");
+        select.innerHTML = `<option value="">请选择已有存档</option>`;
+
+        for (const item of saveManifest) {
+          const option = document.createElement("option");
+          option.value = item.file;
+          option.textContent = item.name || item.file;
+          select.appendChild(option);
+        }
+      } catch (err) {
+        $("error").textContent = err.message || String(err);
+        console.error(err);
+      } finally {
+        $("loading").style.display = "none";
+      }
+    }
+
+    async function loadSelectedSave() {
+      $("error").textContent = "";
+      $("loading").style.display = "inline-flex";
+      try {
+        const file = $("saveSelect").value;
+        if (!file) throw new Error("请先选择一个存档。");
+
+        await loadTranslationFiles([]);
+        const response = await fetch("saves/" + encodeURIComponent(file) + "?ts=" + Date.now());
+        if (!response.ok) throw new Error("读取存档失败：" + file);
+
+        const text = await response.text();
+        const data = parseJsonLikeText(text);
+        await renderReportObject(data);
+      } catch (err) {
+        $("error").textContent = err.message || String(err);
+        console.error(err);
+      } finally {
+        $("loading").style.display = "none";
+      }
+    }
+
     async function renderAll() {
       $("error").textContent = "";
       $("loading").style.display = "inline-flex";
@@ -811,12 +885,7 @@
         await loadTranslationFiles([]);
         const text = await readFileAsText(runFile);
         reportData = parseJsonLikeText(text);
-        renderStatus(reportData);
-        renderActs(reportData);
-        renderCollections(reportData);
-
-        document.querySelector(".uploader").style.display = "none";
-        $("backBtn").style.display = "inline-block";
+        await renderReportObject(reportData);
       } catch (err) {
         $("error").textContent = err.message || String(err);
         console.error(err);
@@ -873,6 +942,8 @@
       $("error").textContent = "";
     });
 
+    $("loadSavesBtn").addEventListener("click", loadSavesManifest);
+    $("loadSelectedSaveBtn").addEventListener("click", loadSelectedSave);
     $("renderBtn").addEventListener("click", renderAll);
   </script>
 </body>
