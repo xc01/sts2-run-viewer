@@ -253,7 +253,7 @@
   </style>
 </head>
 <body>
-  <div id="versionBadge" class="version-badge">v0.0.7</div>
+  <div id="versionBadge" class="version-badge">v0.0.8</div>
   <main class="app">
     <div class="title">
       <div>
@@ -270,14 +270,17 @@
         <button id="renderBtn">生成 UI</button>
         <div id="loading" class="loading" style="display:none">
           <span class="spinner"></span>
-          <span id="loadingText">正在生成 UI...</span>正在生成 UI...</span>
+          <span id="loadingText">正在生成 UI...</span>
         </div>
         <div id="selectedFile" class="selected-file">尚未选择文件</div>
 
-        <div cla
-          <select id="saveSelect">  </select>
+        <div class="save-loader">
+          <select id="saveSelect">
+            <option value="">正在读取存档列表...</option>
+          </select>
           <button id="loadSelectedSaveBtn" type="button">打开存档</button>
         </div>
+
         <div id="error" class="error"></div>
       </div>
     </section>
@@ -833,9 +836,10 @@
     }
 
     async function loadSavesManifest() {
-      $("error    async function loadSavesManifest() {
       $("error").textContent = "";
-      setLoading(true, "正在读取存档列表...");json?ts=" + Date.now());
+      setLoading(true, "正在读取存档列表...");
+      try {
+        const response = await fetch("saves/manifest.json?ts=" + Date.now());
         if (!response.ok) {
           throw new Error("没有找到 saves/manifest.json，请确认 saves 文件夹和 manifest.json 已经上传到 GitHub。");
         }
@@ -862,10 +866,14 @@
       }
     }
 
-    async function loadSelectedSsetLoading(false);   try {
-           async function loadSelectedSave() {
+    async function loadSelectedSave() {
       $("error").textContent = "";
-      setLoading(true, "正在打开存档..."););
+      setLoading(true, "正在打开存档...");
+      try {
+        const file = $("saveSelect").value;
+        if (!file) throw new Error("请先选择一个存档。");
+
+        await loadTranslationFiles([]);
         const response = await fetch("saves/" + encodeURIComponent(file) + "?ts=" + Date.now());
         if (!response.ok) throw new Error("读取存档失败：" + file);
 
@@ -876,12 +884,11 @@
         $("error").textContent = err.message || String(err);
         console.error(err);
       } finally {
-        $("loading").style.display = "none";
+        setLoading(false);
       }
     }
 
     function setLoading(show, text = "正在处理...") {
-      $("loadingText").textContent = text;setLoading(false);show ? "inline-f    function setLoading(show, text = "正在处理...") {
       $("loadingText").textContent = text;
       $("loading").style.display = show ? "inline-flex" : "none";
       $("renderBtn").disabled = show;
@@ -908,7 +915,7 @@
       }
     }
 
-    function setRunFilefile) {
+    function setRunFile(file) {
       if (!file) return;
       const input = $("runFile");
       const dt = new DataTransfer();
@@ -920,7 +927,7 @@
     const dropZone = $("dropZone");
 
     dropZone.addEventListener("click", (e) => {
-      if (e.target.closest("button, input, select, option, .save-loader")) return;
+      if (e.target.closest("button, input, button, input, select, option, .save-loader")) return;
       $("runFile").click();
     });
 
@@ -941,11 +948,12 @@
       if (file) renderAll();
     });
 
-     $("runFile").addEventListener("change", (e) => {
+    $("runFile").addEventListener("change", (e) => {
       const file = e.target.files && e.target.files[0];
       $("selectedFile").textContent = file ? `已选择：${file.name}` : "尚未选择文件";
       if (file) renderAll();
     });
+
     $("backBtn").addEventListener("click", () => {
       document.querySelector(".uploader").style.display = "grid";
       $("backBtn").style.display = "none";
@@ -956,11 +964,12 @@
       $("error").textContent = "";
     });
 
-     $("loadSelectedSaveBtn").addEventListener("click", loadSelectedSave);
+    $("loadSelectedSaveBtn").addEventListener("click", loadSelectedSave);
     $("saveSelect").addEventListener("change", () => {
       if ($("saveSelect").value) loadSelectedSave();
     });
     $("renderBtn").addEventListener("click", renderAll);
-    loadSavesManifest();  </script>
+    loadSavesManifest();
+  </script>
 </body>
 </html>
