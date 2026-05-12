@@ -193,7 +193,7 @@
       </div>
       <div class="upload-card">
         <h2>2. 上传翻译文件</h2>
-        <p>可一次选择全部翻译文件：sts2_card_translations.json、sts2_relics.json、sts2_potions.json 等。大小写不敏感。</p>
+        <p>翻译文件默认从 GitHub 仓库的 <code>data/</code> 文件夹读取，例如 <code>data/sts2_card_translations.json</code>。如果自动读取失败，也可以在这里手动上传覆盖。</p>
         <input id="translationFiles" type="file" multiple accept=".json,application/json" />
         <button id="renderBtn">生成 UI</button>
         <div id="error" class="error"></div>
@@ -244,6 +244,20 @@
 
     let reportData = null;
     let translations = new Map();
+
+    const TRANSLATION_FILES = [
+      "sts2_card_translations.json",
+      "sts2_events.json",
+      "sts2_misc_ancient_rewards.json",
+      "sts2_misc_card_types.json",
+      "sts2_misc_characters.json",
+      "sts2_misc_powers.json",
+      "sts2_misc_rest_sites.json",
+      "sts2_misc_tooltips.json",
+      "sts2_monsters.json",
+      "sts2_potions.json",
+      "sts2_relics.json"
+    ];
 
     const $ = (id) => document.getElementById(id);
 
@@ -314,14 +328,35 @@
 
     async function loadTranslationFiles(files) {
       translations = new Map();
-      for (const file of files) {
-        const text = await readFileAsText(file);
+
+      if (files && files.length) {
+        for (const file of files) {
+          const text = await readFileAsText(file);
+          try {
+            const json = JSON.parse(text);
+            flattenTranslations(json);
+          } catch (e) {
+            console.warn(`翻译文件解析失败：${file.name}`, e);
+          }
+        }
+        return;
+      }
+
+      const failed = [];
+      for (const name of TRANSLATION_FILES) {
         try {
-          const json = JSON.parse(text);
+          const response = await fetch(`data/${name}`);
+          if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+          const json = await response.json();
           flattenTranslations(json);
         } catch (e) {
-          console.warn(`翻译文件解析失败：${file.name}`, e);
+          failed.push(name);
+          console.warn(`自动读取翻译文件失败：data/${name}`, e);
         }
+      }
+
+      if (failed.length === TRANSLATION_FILES.length) {
+        throw new Error("没有读取到翻译文件。请确认这些 JSON 文件位于仓库的 data 文件夹中，或在页面上手动上传翻译文件。");
       }
     }
 
